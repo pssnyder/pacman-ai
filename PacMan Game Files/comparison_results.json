@@ -1,0 +1,77 @@
+{
+  "expert": {
+    "agent": "Expert",
+    "scores": [
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188,
+      188
+    ],
+    "avg_score": 188.0,
+    "std_score": 0.0,
+    "min_score": 188,
+    "max_score": 188,
+    "avg_reward": 158.0,
+    "avg_steps": 219.0,
+    "wins": 0,
+    "win_rate": 0.0
+  },
+  "ai": {
+    "agent": "Neural Network",
+    "scores": [
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140,
+      140
+    ],
+    "avg_score": 140.0,
+    "std_score": 0.0,
+    "min_score": 140,
+    "max_score": 140,
+    "avg_reward": 110.0,
+    "avg_steps": 159.0,
+    "wins": 0,
+    "win_rate": 0.0
+  },
+  "config": {
+    "ghost_ai_types": [
+      "chase",
+      "chase",
+      "chase",
+      "chase"
+    ],
+    "difficulty": "hard"
+  }
+}
