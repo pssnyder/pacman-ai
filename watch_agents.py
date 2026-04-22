@@ -312,25 +312,30 @@ class GamePanel:
         
         # Visual setup
         self.setup_panel()
+        
+        # Cache for performance - store static elements
+        self.wall_patches = []
+        self.draw_walls()  # Draw walls once
+        
+        # Dynamic elements - will be updated
+        self.pellet_patches = []
+        self.power_pellet_patches = []
+        self.ghost_patches = []
+        self.pacman_patch = None
+        self.stats_text = None
     
     def setup_panel(self):
         """Setup panel visualization"""
-        self.ax.clear()
         self.ax.set_xlim(-0.5, self.game_config.map_width - 0.5)
         self.ax.set_ylim(-0.5, self.game_config.map_height - 0.5)
         self.ax.set_aspect('equal')
         self.ax.invert_yaxis()
         self.ax.set_title(self.title, fontsize=10, fontweight='bold')
         self.ax.axis('off')
+        self.ax.set_facecolor('black')
     
-    def render_game(self):
-        """Render current game state"""
-        self.ax.clear()
-        self.setup_panel()
-        
-        state = self.game.get_state()
-        
-        # Draw walls
+    def draw_walls(self):
+        """Draw walls once (they never change)"""
         for y in range(self.game_config.map_height):
             for x in range(self.game_config.map_width):
                 pos = Position(x, y)
@@ -340,18 +345,38 @@ class GamePanel:
                     rect = patches.Rectangle((x - 0.4, y - 0.4), 0.8, 0.8,
                                             linewidth=0, facecolor='#2121DE')
                     self.ax.add_patch(rect)
+                    self.wall_patches.append(rect)
+    
+    def render_game(self):
+        """Render current game state (optimized - only update dynamic elements)"""
+        state = self.game.get_state()
+        
+        # Remove old dynamic patches
+        for patch in self.pellet_patches + self.power_pellet_patches + self.ghost_patches:
+            patch.remove()
+        if self.pacman_patch:
+            self.pacman_patch.remove()
+        if self.stats_text:
+            self.stats_text.remove()
+        
+        # Clear lists
+        self.pellet_patches.clear()
+        self.power_pellet_patches.clear()
+        self.ghost_patches.clear()
         
         # Draw pellets
         for px, py in state['pellet_positions']:
             circle = patches.Circle((px, py), 0.08, facecolor='#FFB897', edgecolor='none')
             self.ax.add_patch(circle)
+            self.pellet_patches.append(circle)
         
         # Draw power pellets
         for px, py in state['power_pellet_positions']:
             circle = patches.Circle((px, py), 0.2, facecolor='orange', edgecolor='none')
             self.ax.add_patch(circle)
+            self.power_pellet_patches.append(circle)
         
-        # Draw ghosts
+        # Draw ghosts (as rectangles to differentiate from Pacman)
         ghost_positions = state['ghost_positions']
         ghost_vulnerable = state['ghost_vulnerable']
         ghost_colors = ['#FF0000', '#FFB8FF', '#00FFFF', '#FFB852']  # Red, Pink, Cyan, Orange
@@ -362,25 +387,32 @@ class GamePanel:
             else:
                 color = ghost_colors[i % len(ghost_colors)]
             
-            circle = patches.Circle((gx, gy), 0.35, facecolor=color, edgecolor='black', linewidth=0.5)
-            self.ax.add_patch(circle)
+            # Rectangular ghost (0.7 width x 0.8 height for tall rectangle)
+            rect = patches.Rectangle((gx - 0.35, gy - 0.4), 0.7, 0.8, 
+                                    facecolor=color, edgecolor='black', linewidth=0.5)
+            self.ax.add_patch(rect)
+            self.ghost_patches.append(rect)
         
-        # Draw Pacman
+        # Draw Pacman (circle)
         pacman_x, pacman_y = state['pacman_pos']
-        pacman_circle = patches.Circle((pacman_x, pacman_y), 0.35, 
-                                      facecolor='yellow', edgecolor='black', linewidth=1)
-        self.ax.add_patch(pacman_circle)
+        self.pacman_patch = patches.Circle((pacman_x, pacman_y), 0.35, 
+                                          facecolor='yellow', edgecolor='black', linewidth=1)
+        self.ax.add_patch(self.pacman_patch)
         
         # Draw stats
         game_state = state['game_state']
         status_color = 'green' if game_state == 'won' else 'red' if game_state == 'lost' else 'white'
-        stats_text = f"Score: {state['score']} | Steps: {self.step_count} | Games: {self.total_games}"
+        
+        # Add lives display with visual indicator
+        lives_display = '❤️' * state['lives'] if state['lives'] > 0 else '💀'
+        stats_text = f"Lives: {lives_display} | Score: {state['score']} | Steps: {self.step_count}"
+        stats_text += f" | Pellets: {state['pellet_count']} | Games: {self.total_games}"
         if self.total_games > 0:
             win_rate = (self.total_wins / self.total_games) * 100
             avg_score = self.total_score / self.total_games
             stats_text += f"\nWR: {win_rate:.0f}% | Avg: {avg_score:.0f}"
         
-        self.ax.text(self.game_config.map_width / 2, -0.2, stats_text,
+        self.stats_text = self.ax.text(self.game_config.map_width / 2, -0.2, stats_text,
                     ha='center', va='top', fontsize=8, 
                     bbox=dict(boxstyle='round', facecolor=status_color, alpha=0.3))
     
@@ -431,7 +463,6 @@ class MultiPanelViewer:
         """
         self.layout = layout
         self.speed = speed
-        self.game_map = get_classic_map()
         
         # Setup figure
         if layout == '2-panel':
@@ -456,23 +487,23 @@ class MultiPanelViewer:
             ghost_ai_types=['random', 'random', 'chase', 'random']
         )
         
-        # Expert panel
+        # Expert panel (with its own map instance)
         panels.append(GamePanel(
             self.axes[0], 
             "Expert System - Medium Difficulty",
             'expert', 
             'medium',
-            self.game_map,
+            get_classic_map(),  # Each panel gets its own map!
             config
         ))
         
-        # AI panel
+        # AI panel (with its own map instance)
         panels.append(GamePanel(
             self.axes[1],
             "Neural Network AI - Medium Difficulty",
             'ai',
             'medium',
-            self.game_map,
+            get_classic_map(),  # Each panel gets its own map!
             config
         ))
         
@@ -500,7 +531,7 @@ class MultiPanelViewer:
                 f"Expert - {diff_name}",
                 'expert',
                 diff_name.lower(),
-                self.game_map,
+                get_classic_map(),  # Each panel gets its own map!
                 config
             ))
             
@@ -510,7 +541,7 @@ class MultiPanelViewer:
                 f"AI - {diff_name}",
                 'ai',
                 diff_name.lower(),
-                self.game_map,
+                get_classic_map(),  # Each panel gets its own map!
                 config
             ))
         
@@ -518,10 +549,9 @@ class MultiPanelViewer:
     
     def update(self, frame):
         """Update all panels (called by animation)"""
-        # Step each panel 'speed' times per frame
-        for _ in range(self.speed):
-            for panel in self.panels:
-                panel.step()
+        # Execute one step per frame (smooth animation)
+        for panel in self.panels:
+            panel.step()
         
         # Render all panels
         for panel in self.panels:
@@ -534,11 +564,17 @@ class MultiPanelViewer:
         print(f"\nStarting {self.layout} viewer at {self.speed}x speed...")
         print("Close the window to exit.")
         
-        # Animation: update every 50ms (20 FPS)
+        # Calculate interval based on speed: faster speed = shorter interval
+        # Base: 50ms (20 FPS), speed 2x = 25ms (40 FPS), speed 4x = 12.5ms (80 FPS)
+        interval = 50 / self.speed
+        
+        print(f"Animation interval: {interval:.1f}ms ({1000/interval:.0f} FPS)")
+        
+        # Animation with speed-adjusted interval for smooth playback
         self.anim = FuncAnimation(
             self.fig, 
             self.update,
-            interval=50,  # 50ms = 20 FPS
+            interval=interval,
             blit=False,
             cache_frame_data=False
         )
